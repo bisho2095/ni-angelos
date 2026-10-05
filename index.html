@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>تسجيل الحضور</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;800&display=swap">
+<style>
+:root{--ink:#14222e;--paper:#f2f5f8;--blue:#1f4e78;--ok:#1f7a4d;--warn:#b7791f;--bad:#b4332f;--line:#d5dde5}
+*{box-sizing:border-box}
+body{margin:0;font-family:Cairo,system-ui,sans-serif;background:var(--paper);color:var(--ink);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+[hidden]{display:none!important}
+main{max-width:480px;margin:0 auto;padding:16px}
+h1{font-size:26px;margin:40px 0 16px;color:var(--blue)}
+input,button{font:inherit;font-size:18px;border-radius:10px;border:1px solid var(--line);padding:12px 14px;width:100%}
+button{background:var(--blue);color:#fff;border:0;font-weight:800;margin-top:10px}
+header{display:flex;justify-content:space-between;align-items:baseline;font-weight:800}
+header span{color:var(--blue);font-size:22px}
+.cam{position:relative;margin:12px 0;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:1}
+video{width:100%;height:100%;object-fit:cover}
+.cam i{position:absolute;inset:18%;border:3px solid #fff;border-radius:14px;opacity:.85}
+#res{min-height:92px;border-radius:16px;padding:16px;background:#fff;border:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;transition:background .15s}
+#res b{font-size:28px;line-height:1.3}
+#res.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+#res.dup{background:var(--warn);color:#fff;border-color:var(--warn)}
+#res.bad{background:var(--bad);color:#fff;border-color:var(--bad)}
+details{margin-top:14px}
+summary{font-weight:800;padding:10px 0;cursor:pointer}
+#list button{background:#fff;color:var(--ink);border:1px solid var(--line);text-align:start;font-weight:500}
+ul{list-style:none;padding:0;margin:14px 0;color:#4a5b6b}
+li{padding:6px 0;border-bottom:1px solid var(--line)}
+#err{color:var(--bad);min-height:24px}
+</style>
+</head>
+<body>
+<main>
+  <section id="login">
+    <h1>تسجيل الحضور</h1>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="الرقم السري">
+    <button id="go">دخول</button>
+    <p id="err"></p>
+  </section>
+
+  <section id="app" hidden>
+    <header><div id="who"></div><span id="cnt">0</span></header>
+    <div class="cam"><video id="v" playsinline muted></video><i></i><button id="camBtn" style="position:absolute;z-index:2;inset:auto 16px 16px;width:auto">شغّل الكاميرا</button></div>
+    <div id="res">وجّه الكاميرا على الـ QR</div>
+    <details>
+      <summary>تسجيل يدوي (الموبايل فصل شحنه)</summary>
+      <input id="q" placeholder="اكتب الاسم أو الكود" autocomplete="off">
+      <div id="list"></div>
+    </details>
+    <ul id="log"></ul>
+  </section>
+  <canvas id="c" hidden></canvas>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+const API = 'PASTE_APPS_SCRIPT_URL_HERE'; // رابط الـ Web app من Apps Script
+const $ = id => document.getElementById(id);
+const store = {
+  get: k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+let pin = location.hash.slice(1) || store.get('pin'), started = false, busy = false, last = '', lastAt = 0;
+
+async function call(body) {
+  const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ pin, ...body }) });
+  return r.json();
+}
+
+async function login() {
+  $('err').textContent = '';
+  pin = $('pin').value.trim() || pin;
+  try {
+    const d = await call({ action: 'auth' });
+    if (!d.ok) { $('err').textContent = d.msg; return; }
+    store.set('pin', pin); history.replaceState(null, '', '#' + pin);
+    $('who').textContent = d.servant; $('cnt').textContent = d.count;
+    $('login').hidden = true; $('app').hidden = false;
+    autoStart();
+  } catch (e) { $('err').textContent = 'مفيش اتصال بالنت، جرّب تاني'; }
+}
+$('go').onclick = login;
+$('pin').onkeydown = e => { if (e.key === 'Enter') login(); };
+if (pin) login();
+
+function show(d) {
+  const r = $('res');
+  if (d.ok && !d.dup) { r.className = 'ok'; r.innerHTML = '<b>' + d.name + '</b>تم التسجيل'; $('cnt').textContent = d.count; add(d.name); beep(1); }
+  else if (d.ok) { r.className = 'dup'; r.innerHTML = '<b>' + d.name + '</b>مسجل قبل كده النهارده'; beep(2); }
+  else { r.className = 'bad'; r.innerHTML = '<b>' + d.msg + '</b>'; beep(2); }
+}
+function add(n) {
+  const li = document.createElement('li');
+  li.textContent = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) + '  ' + n;
+  $('log').prepend(li);
+  while ($('log').children.length > 6) $('log').lastChild.remove();
+}
+function beep(n) { if (navigator.vibrate) navigator.vibrate(n === 1 ? 80 : [100, 60, 100]); }
+
+async function send(body) {
+  busy = true;
+  $('res').className = ''; $('res').textContent = 'جاري التسجيل...';
+  try { show(await call(body)); }
+  catch (e) { show({ ok: false, msg: 'مفيش اتصال، جرّب تاني' }); }
+  setTimeout(() => { busy = false; }, 1800);
+}
+
+const bd = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+async function autoStart() {
+  try { if ((await navigator.permissions.query({ name: 'camera' })).state === 'granted') start(); } catch (e) {}
+}
+$('camBtn').onclick = start;
+async function start() {
+  if (started) return;
+  const btn = $('camBtn'), r = $('res');
+  btn.hidden = true;
+  const hang = setTimeout(() => {
+    r.className = 'bad'; r.innerHTML = '<b>مفيش رد من الكاميرا</b>افتح الرابط في Chrome أو Safari مباشرة (مش من جوه واتساب أو ماسنجر)'; btn.hidden = false;
+  }, 8000);
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    clearTimeout(hang); started = true; r.className = ''; r.textContent = 'وجّه الكاميرا على الـ QR';
+    $('v').srcObject = s; await $('v').play(); tick();
+  } catch (e) {
+    clearTimeout(hang); btn.hidden = false;
+    r.className = 'bad'; r.innerHTML = '<b>الكاميرا مش شغالة</b>اضغط "شغّل الكاميرا" واسمح بالوصول من إعدادات المتصفح';
+  }
+}
+async function tick() {
+  const v = $('v');
+  if (v.readyState === 4 && !busy) {
+    let t = '';
+    try {
+      if (bd) { const r = await bd.detect(v); t = r.length ? r[0].rawValue : ''; }
+      else {
+        const c = $('c'), k = Math.min(1, 640 / v.videoWidth);
+        c.width = v.videoWidth * k; c.height = v.videoHeight * k;
+        const x = c.getContext('2d', { willReadFrequently: true });
+        x.drawImage(v, 0, 0, c.width, c.height);
+        const im = x.getImageData(0, 0, c.width, c.height), q = jsQR(im.data, im.width, im.height);
+        t = q ? q.data : '';
+      }
+    } catch (e) {}
+    if (t.startsWith('NIA-') && (t !== last || Date.now() - lastAt > 5000)) { last = t; lastAt = Date.now(); send({ action: 'scan', token: t }); }
+  }
+  setTimeout(tick, 200);
+}
+
+let timer;
+$('q').oninput = () => {
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    const q = $('q').value.trim(), box = $('list');
+    box.innerHTML = '';
+    if (!q) return;
+    try {
+      (await call({ action: 'search', q })).list.forEach(p => {
+        const b = document.createElement('button');
+        b.textContent = p.code + ' - ' + p.name;
+        b.onclick = () => { box.innerHTML = ''; $('q').value = ''; send({ action: 'manual', code: p.code }); };
+        box.appendChild(b);
+      });
+    } catch (e) { box.textContent = 'مفيش اتصال'; }
+  }, 350);
+};
+</script>
+</body>
+</html>
