@@ -64,7 +64,7 @@ const store = {
   get: k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
 };
-$('ver').textContent = 'إصدار 6 - ' + API.slice(0, 48);
+$('ver').textContent = 'إصدار 7 - ' + API.slice(0, 48);
 let pin = location.hash.slice(1) || store.get('pin'), started = false, busy = false, last = '', lastAt = 0;
 
 async function call(body) {
@@ -167,13 +167,16 @@ $('q').oninput = () => {
     box.innerHTML = '';
     if (!q) return;
     try {
-      (await call({ action: 'search', q })).list.forEach(p => {
+      const d = await call({ action: 'search', q });
+      if (!d.ok) { box.textContent = d.msg; return; }
+      if (!d.list.length) { box.textContent = 'مفيش نتايج'; return; }
+      d.list.forEach(p => {
         const b = document.createElement('button');
         b.textContent = p.code + ' - ' + p.name;
         b.onclick = () => { box.innerHTML = ''; $('q').value = ''; send({ action: 'manual', code: p.code }); };
         box.appendChild(b);
       });
-    } catch (e) { box.textContent = 'مفيش اتصال'; }
+    } catch (e) { box.textContent = 'تعذّر الاتصال: ' + e.message; }
   }, 350);
 };
 </script>
