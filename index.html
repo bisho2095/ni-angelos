@@ -45,7 +45,7 @@ li{padding:6px 0;border-bottom:1px solid var(--line)}
   <section id="app" hidden>
     <header><div id="who"></div><span id="cnt">0</span></header>
     <div class="cam"><video id="v" playsinline muted></video><i></i><button id="camBtn" style="position:absolute;z-index:2;inset:auto 16px 16px;width:auto">سجل</button></div>
-    <div id="res">وجّه الكاميرا على الـ QR</div>
+    <div id="res">اضغط "سجل" وبعدها وجّه الكاميرا على الـ QR</div>
     <details>
       <summary>تسجيل يدوي (الموبايل فصل شحنه)</summary>
       <input id="q" placeholder="اكتب الاسم أو الكود" autocomplete="off">
@@ -64,7 +64,7 @@ const store = {
   get: k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
 };
-$('ver').textContent = 'إصدار 4 - ' + API.slice(0, 48);
+$('ver').textContent = 'إصدار 5 - ' + API.slice(0, 48);
 let pin = location.hash.slice(1) || store.get('pin'), started = false, busy = false, last = '', lastAt = 0;
 
 async function call(body) {
@@ -83,7 +83,6 @@ async function login() {
     store.set('pin', pin); history.replaceState(null, '', '#' + pin);
     $('who').textContent = d.servant; $('cnt').textContent = d.count;
     $('login').hidden = true; $('app').hidden = false;
-    autoStart();
   } catch (e) { $('err').textContent = API.includes('PASTE') ? 'رابط Apps Script لسه مش متحط في index.html' : 'تعذّر الاتصال: ' + e.message; }
 }
 $('go').onclick = login;
@@ -120,9 +119,6 @@ function stopCam() {
 }
 
 const bd = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
-async function autoStart() {
-  try { if ((await navigator.permissions.query({ name: 'camera' })).state === 'granted') start(); } catch (e) {}
-}
 $('camBtn').onclick = start;
 async function start() {
   if (started) return;
