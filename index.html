@@ -39,11 +39,12 @@ li{padding:6px 0;border-bottom:1px solid var(--line)}
     <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="الرقم السري">
     <button id="go">دخول</button>
     <p id="err"></p>
+    <p id="ver" style="color:#6b7b8a;font-size:13px"></p>
   </section>
 
   <section id="app" hidden>
     <header><div id="who"></div><span id="cnt">0</span></header>
-    <div class="cam"><video id="v" playsinline muted></video><i></i><button id="camBtn" style="position:absolute;z-index:2;inset:auto 16px 16px;width:auto">شغّل الكاميرا</button></div>
+    <div class="cam"><video id="v" playsinline muted></video><i></i><button id="camBtn" style="position:absolute;z-index:2;inset:auto 16px 16px;width:auto">سجل</button></div>
     <div id="res">وجّه الكاميرا على الـ QR</div>
     <details>
       <summary>تسجيل يدوي (الموبايل فصل شحنه)</summary>
@@ -57,17 +58,20 @@ li{padding:6px 0;border-bottom:1px solid var(--line)}
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
-const API = 'https://script.google.com/macros/s/AKfycby1T1SJn-9OIjQ19tarpB3Mjwn_DMgI26IzaRd3GZ1JMCg7kkQdIUWAmA4ASHGSXIDAVQ/exec'; // رابط الـ Web app من Apps Script
+const API = 'https://script.google.com/macros/s/AKfycbxDQ1eDqKJX6gbuFnEQchRMov5V74LH7yMf61S9qpy6rWMR99vh0lFgwKSchYwh-Z3ncw/exec'; // رابط الـ Web app من Apps Script
 const $ = id => document.getElementById(id);
 const store = {
   get: k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
 };
+$('ver').textContent = 'إصدار 4 - ' + API.slice(0, 48);
 let pin = location.hash.slice(1) || store.get('pin'), started = false, busy = false, last = '', lastAt = 0;
 
 async function call(body) {
   const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ pin, ...body }) });
-  return r.json();
+  const t = await r.text();
+  try { return JSON.parse(t); }
+  catch (e) { throw new Error('HTTP ' + r.status + ' - ' + t.replace(/\s+/g, ' ').slice(0, 70)); }
 }
 
 async function login() {
@@ -80,7 +84,7 @@ async function login() {
     $('who').textContent = d.servant; $('cnt').textContent = d.count;
     $('login').hidden = true; $('app').hidden = false;
     autoStart();
-  } catch (e) { $('err').textContent = 'مفيش اتصال بالنت، جرّب تاني'; }
+  } catch (e) { $('err').textContent = API.includes('PASTE') ? 'رابط Apps Script لسه مش متحط في index.html' : 'تعذّر الاتصال: ' + e.message; }
 }
 $('go').onclick = login;
 $('pin').onkeydown = e => { if (e.key === 'Enter') login(); };
@@ -104,8 +108,15 @@ async function send(body) {
   busy = true;
   $('res').className = ''; $('res').textContent = 'جاري التسجيل...';
   try { show(await call(body)); }
-  catch (e) { show({ ok: false, msg: 'مفيش اتصال، جرّب تاني' }); }
-  setTimeout(() => { busy = false; }, 1800);
+  catch (e) { show({ ok: false, msg: 'تعذّر الاتصال: ' + e.message }); }
+  busy = false; stopCam();
+}
+function stopCam() {
+  started = false;
+  const v = $('v');
+  if (v.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+  v.srcObject = null;
+  $('camBtn').hidden = false;
 }
 
 const bd = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
@@ -115,6 +126,7 @@ async function autoStart() {
 $('camBtn').onclick = start;
 async function start() {
   if (started) return;
+  last = '';
   const btn = $('camBtn'), r = $('res');
   btn.hidden = true;
   const hang = setTimeout(() => {
@@ -123,13 +135,15 @@ async function start() {
   try {
     const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
     clearTimeout(hang); started = true; r.className = ''; r.textContent = 'وجّه الكاميرا على الـ QR';
-    $('v').srcObject = s; await $('v').play(); tick();
+    $('v').srcObject = s; await $('v').play(); tick(++loop);
   } catch (e) {
     clearTimeout(hang); btn.hidden = false;
-    r.className = 'bad'; r.innerHTML = '<b>الكاميرا مش شغالة</b>اضغط "شغّل الكاميرا" واسمح بالوصول من إعدادات المتصفح';
+    r.className = 'bad'; r.innerHTML = '<b>الكاميرا مش شغالة</b>اضغط "سجل" واسمح بالوصول من إعدادات المتصفح';
   }
 }
-async function tick() {
+let loop = 0;
+async function tick(id) {
+  if (!started || id !== loop) return;
   const v = $('v');
   if (v.readyState === 4 && !busy) {
     let t = '';
@@ -146,7 +160,7 @@ async function tick() {
     } catch (e) {}
     if (t.startsWith('NIA-') && (t !== last || Date.now() - lastAt > 5000)) { last = t; lastAt = Date.now(); send({ action: 'scan', token: t }); }
   }
-  setTimeout(tick, 200);
+  setTimeout(() => tick(id), 200);
 }
 
 let timer;
