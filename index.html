@@ -58,13 +58,13 @@ li{padding:6px 0;border-bottom:1px solid var(--line)}
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
-const API = 'https://script.google.com/macros/s/AKfycbxDQ1eDqKJX6gbuFnEQchRMov5V74LH7yMf61S9qpy6rWMR99vh0lFgwKSchYwh-Z3ncw/exec'; // رابط الـ Web app من Apps Script
+const API = 'https://script.google.com/macros/s/AKfycby0uVmugXRFNJ_VGyV_JFiuD17gqlVbafzZm8l0GNgQWaRa-OISu2sAE9BgthAtn_kjHg/exec'; // رابط الـ Web app من Apps Script
 const $ = id => document.getElementById(id);
 const store = {
   get: k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
 };
-$('ver').textContent = 'إصدار 5 - ' + API.slice(0, 48);
+$('ver').textContent = 'إصدار 6 - ' + API.slice(0, 48);
 let pin = location.hash.slice(1) || store.get('pin'), started = false, busy = false, last = '', lastAt = 0;
 
 async function call(body) {
